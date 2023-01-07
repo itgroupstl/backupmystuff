@@ -7,7 +7,8 @@ A bash script to assist in the backup of files and folders.
  Visit: https://docs.aws.amazon.com/ses/latest/dg/send-email.html <br />
  
  **Installation** <br />
- Installation is done by making the sure this file is executable. (sudo chmod +x backupmystuff.sh) <br />
+ Edit the script file with your information and what you want to backup <br />
+ Making sure it is executable. (sudo chmod +x backupmystuff.sh) <br />
 
  **Execution** <br />
  You can run it from the command line as a regular user for a more interactive experience (sudo ./backupmystuff.sh) or <br />
