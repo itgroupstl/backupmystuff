@@ -1,7 +1,7 @@
 # backupmystuff
 A bash script to assist in the backup of files and folders. 
 
- **Email Setup** <br />
+ **Email Setup** (optional if you do not run as a cron job)<br />
  No need to have a mail server installed <br />
  This script utilizes the Amazon SES (Simple Email Service) <br />
  Visit: https://docs.aws.amazon.com/ses/latest/dg/send-email.html <br />
