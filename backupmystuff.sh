@@ -8,6 +8,11 @@ items="/var/www/html "
 # Define path to backup drive
 backup_drive="/bkupdrive"
 
+# Define type backup drive (USB, SATA, SCSI, NVMe, PCIe, SAS, SAS-SSD, SATA-SSD)
+# This just provides a default transfer speed
+backup_drive_type="USB"
+
+
 # SMTP MAIL SETTINGS
 # These settings are designed to use the Amazon SES (Simple Email Service)
 # For Amazon SES setup instructions visit: https://docs.aws.amazon.com/ses/latest/dg/send-email.html
@@ -22,12 +27,13 @@ email_subject="Weekly Local Backup"
 
 #####################################################################################
 #####################################################################################
-### READ THIS #######################################################################
+### READ THIS ##############################
 #####################################################################################
 #####################################################################################
 
 # Thing 1
-# The purpose of this script is to backup files and folders of your choice
+# The purpose of this script is to backup files and folders of your choice by compressing
+# items in your list into a single file
 
 # Thing 2
 # Installation is done by making the sure this file is executable. (sudo chmod +x backupmystuff.sh)
@@ -56,13 +62,63 @@ email_subject="Weekly Local Backup"
 #####################################################################################
 
 
+
+
 # Define the format of the backup drive
 # Defaults to automatcially detect
-backup_drive_format=$(df -T $backup_drive | awk '$NF=="'"$backup_drive"'" {print $2}')
-printf "Bakup Drive Format: $backup_drive_format \n"
+file_system=$(df -T "$backup_drive" | awk 'NR==2 {print $2}')
+
+printf "Backup Drive Format: $file_system \n"
 # Manually specify backup drive format
 # Options include(vfat,exfat,ntfs,hfsplus,ext2,ext3,ext4)
-#backup_drive_format="vfat"
+#file_system="vfat"
+
+
+# Perform a read/write test on the drive
+start_time=$(date +%s%N)
+dd if="/dev/zero" of="$backup_drive/test_file" bs=1M count=100 conv=fdatasync > /dev/null 2>&1
+end_time=$(date +%s%N)
+
+# Calculate the elapsed time (in milliseconds)
+elapsed_time=$(((end_time - start_time)/1000000))
+
+# Calculate the transfer speed (in bytes per second)
+test_transfer_speed=$((100*1024*1024/elapsed_time))
+
+# Calculate the transfer speed (in bytes/second)
+if [ "$elapsed_time" -eq 0 ]; then
+  printf "Testing the backup drive: $elapsed_time ms \n"
+  printf "Make sure backup drive is available and able to write to"
+  printf "Backup Cancelled\xF0\x9F\x92\xA5\n"
+  printf "\n"
+  exit 1
+else
+  printf "Testing the backup drive: $elapsed_time ms OK\n"
+fi
+
+printf "Test transferred at: $test_transfer_speed bytes/sec \n"
+
+case "$file_system" in
+  "USB") transfer_speed=50000;;
+  "SATA") transfer_speed=200000;;
+  "SCSI") transfer_speed=500000;;
+  "NVMe") transfer_speed=3500000;;
+  "PCIe") transfer_speed=1000000;;
+  "SAS") transfer_speed=1500000;;
+  "SAS-SSD") transfer_speed=2400000;;
+  "SATA-SSD") transfer_speed=600000;;
+  *) transfer_speed=500000;;
+esac
+
+if [[ $test_transfer_speed -gt $transfer_speed ]]; then
+  transfer_speed=$test_transfer_speed
+fi
+
+
+# Clean up the test file
+rm "$backup_drive/test_file"
+
+
 
 # Define items to skip (currently skips hidden files and folders)
 skip=".*/"
@@ -83,7 +139,7 @@ delay=0.1
 
 #####################################################################################
 #####################################################################################
-### Really probably do not need to modify anything below here #######################
+### Probably really do not need to modify anything below here #######################
 #####################################################################################
 #####################################################################################
 
@@ -127,6 +183,7 @@ backitupuser(){
   printf "\rCompressed ... $output"
 
   size=$(stat -c%s $tmp_file)
+
   pv -s $size -t -r $tmp_file > $bkup_file
 
   rm $tmp_file
@@ -146,7 +203,7 @@ backitupuser(){
 
 
 
-  case "$backup_drive_format" in
+  case "$file_system" in
     "vfat")
       # Split file into smaller chunks and copy separately
       split -b 3GB $bkup_file $bkup_file.part
@@ -198,7 +255,7 @@ backitupuser(){
   printf "done \n"
 
   # Print rsync output
-  printf "Copied ... $output_copy \n"
+  printf "Copied ... $output_copy"
 
   # Set message
   msg="Cleaning Up... \xF0\x9F\xA7\xB9  "
@@ -217,7 +274,7 @@ backitupuser(){
   printf ""
   printf "done \n Backup Complete \xF0\x9F\x9A\x80 \n"
 
-
+  exit 0
 }
 
 
@@ -240,7 +297,7 @@ backitupcron(){
 
 
 
-  case "$backup_drive_format" in
+  case "$file_system" in
   "vfat")
     # Split file into smaller chunks and copy separately
     split -b 4GB $bkup_file $bkup_file.part
@@ -322,9 +379,38 @@ email_results(){
 }
 
 
-# Calculate size of items to be backed up
+# Calculate the total size of all items in bytes
+file_size_bytes=$(du -c -b --exclude=$skip $items | awk 'END {print $1}')
+printf "File Size (bytes): $file_size_bytes \n"
+
+# Calculate the total size of all items in gigabytes
+file_size_gigabytes=$(bc <<< "scale=2; $file_size_bytes / 1024 / 1024 / 1024")
+printf "File Size (gb): $file_size_gigabytes \n"
+
+
+printf "Transfer Speed (bytes/second): $transfer_speed \n"
+
 printf "Calculating size of items to be backed up...  \xF0\x9F\x96\xA9  \n"
 du -ch --apparent-size --summarize --exclude=$skip $items
+
+
+# Calculate the estimated final size of the items after compression (in bytes)
+# Since its impossible to know much compression will happen, 30% is used
+estimated_compressed_size_bytes=$(bc <<< "$file_size_bytes * 0.7")
+
+# Calculate the estimated compressed size in gigabytes
+estimated_compressed_size_gigabytes=$(bc <<< "scale=2; $estimated_compressed_size_bytes / 1024 / 1024 / 1024")
+
+# Calculate the estimated time to copy the compressed items (in seconds)
+estimated_time=$(bc <<< "$estimated_compressed_size_bytes / $transfer_speed")
+
+
+# Convert the number of seconds into a more readable format
+# The 'awk' command is used to format the output
+readable_time=$(awk -v t=$estimated_time 'BEGIN{t=int(t*1000)/1000; printf "%d:%02d:%02d\n", t/3600, t/60%60, t%60}')
+
+printf "Estimated compressed file size (gb): $estimated_compressed_size_gigabytes \n"
+printf "Estimated backup time: $readable_time \n"
 
 
 # Display the prompt
