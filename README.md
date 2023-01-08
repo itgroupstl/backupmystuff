@@ -1,5 +1,6 @@
 # backupmystuff
-A bash script to assist in the backup of files and folders. 
+A bash script to assist in the backup of files and folders.<br />
+Before the backup process starts, information about the backup process is given with the option to cancel.
 
  **Email Setup** (optional if you do not run as a cron job)<br />
  No need to have a mail server installed <br />
@@ -7,7 +8,7 @@ A bash script to assist in the backup of files and folders.
  Visit: https://docs.aws.amazon.com/ses/latest/dg/send-email.html <br />
  
  **Installation** <br />
- Edit the script file with your information and what you want to backup <br />
+ Edit the script file with your information and what stuff you want to backup <br />
  Making sure it is executable. (sudo chmod +x backupmystuff.sh) <br />
 
  **Execution** <br />
