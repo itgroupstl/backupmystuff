@@ -98,7 +98,7 @@ fi
 
 printf "Test transferred at: $test_transfer_speed bytes/sec \n"
 
-case "$file_system" in
+case "$backup_drive_type" in
   "USB") transfer_speed=50000;;
   "SATA") transfer_speed=200000;;
   "SCSI") transfer_speed=500000;;
@@ -248,11 +248,17 @@ backitupuser(){
 
 
 
-
   # Stop spinner
   kill $spinner_pid
 
   printf "done \n"
+
+  # Get the actual filesize 
+  actual_file_size_bytes=$(du -b $bkup_file)
+  actual_file_size_gigabytes=$(bc <<< "scale=2; $actual_file_size_bytes / 1000000000")
+  printf "Compressed File Size (bytes): $actual_file_size_bytes \n"
+  printf "Compressed File Size (gb): $actual_file_size_gigabytes \n"
+
 
   # Print rsync output
   printf "Copied ... $output_copy"
@@ -338,6 +344,8 @@ backitupcron(){
     ;;
 esac
 
+
+
 # Remove backup file
 rm $bkup_file
 
@@ -380,18 +388,17 @@ email_results(){
 
 
 # Calculate the total size of all items in bytes
+printf "Calculating size of items to be backed up...  \xF0\x9F\x96\xA9  \n"
+
 file_size_bytes=$(du -c -b --exclude=$skip $items | awk 'END {print $1}')
-printf "File Size (bytes): $file_size_bytes \n"
+printf "Pre-Compression Size (bytes): $file_size_bytes \n"
 
 # Calculate the total size of all items in gigabytes
 file_size_gigabytes=$(bc <<< "scale=2; $file_size_bytes / 1024 / 1024 / 1024")
-printf "File Size (gb): $file_size_gigabytes \n"
+printf "Pre-Compression  (gb): $file_size_gigabytes \n"
 
 
 printf "Transfer Speed (bytes/second): $transfer_speed \n"
-
-printf "Calculating size of items to be backed up...  \xF0\x9F\x96\xA9  \n"
-du -ch --apparent-size --summarize --exclude=$skip $items
 
 
 # Calculate the estimated final size of the items after compression (in bytes)
@@ -417,7 +424,27 @@ printf "Estimated backup time: $readable_time \n"
 if [[ "$1" == "c" ]]; then
   ANSWER="c"
 else
-  read -p "Is the backup file size ok? Proceed? (y/n/c) " -r -i "y" ANSWER
+# Get the width of the terminal window
+width=$(tput cols)
+
+# Draw the top line
+for i in $(seq 1 $width); do
+  printf "="
+done
+printf "\n"
+
+# Display the text
+echo -e "\033[1m"
+read -p "Is the backup file size ok? Proceed? (y/n/c) " -r -i "y" ANSWER
+echo -e "\033[0m"
+
+# Draw the bottom line
+for i in $(seq 1 $width); do
+  printf "="
+done
+printf "\n"
+
+
 fi
 
 
